@@ -1,6 +1,6 @@
 {
   "name": "partyline",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "we gotchu fam",
   "main": "dist/index.js",
   "scripts": {

@@ -32,7 +32,10 @@ export function initDb(): Promise<void> {
         risk_level TEXT,
         risk_notes TEXT,
         contact_info TEXT,
-        is_211_alternative BOOLEAN
+        is_211_alternative BOOLEAN,
+        verification_tier TEXT DEFAULT 'unverified',
+        external_codes TEXT DEFAULT '{}',
+        source_attribution TEXT
       )
     `;
     
@@ -41,8 +44,38 @@ export function initDb(): Promise<void> {
         console.error("line's busy rn, try again later", err);
         reject(err);
       } else {
-        loadSampleData().then(resolve).catch(reject);
+        migrateV01().then(() => {
+          loadSampleData().then(resolve).catch(reject);
+        }).catch(reject);
       }
+    });
+  });
+}
+
+function migrateV01(): Promise<void> {
+  return new Promise((resolve) => {
+    const database = getDb();
+    
+    // Add verification_tier if missing
+    database.run("ALTER TABLE resources ADD COLUMN verification_tier TEXT DEFAULT 'unverified'", (err) => {
+      if (err) {
+        // Column already exists, that's fine
+      }
+    });
+    
+    // Add external_codes if missing
+    database.run("ALTER TABLE resources ADD COLUMN external_codes TEXT DEFAULT '{}'", (err) => {
+      if (err) {
+        // Column already exists, that's fine
+      }
+    });
+    
+    // Add source_attribution if missing
+    database.run("ALTER TABLE resources ADD COLUMN source_attribution TEXT", (err) => {
+      if (err) {
+        // Column already exists, that's fine
+      }
+      resolve();
     });
   });
 }
@@ -76,7 +109,10 @@ function loadSampleData(): Promise<void> {
           risk_level: "low",
           risk_notes: "App window is TIGHT (72 hours monthly). Plan ahead. They support Kakuma Refugee Camp and Kampala specifically.",
           contact_info: "transsafety.fund/get-help/",
-          is_211_alternative: 1
+          is_211_alternative: 1,
+          verification_tier: "community",
+          external_codes: JSON.stringify({}),
+          source_attribution: "curated_by_advocates_2024"
         },
         {
           id: 2,
@@ -89,7 +125,10 @@ function loadSampleData(): Promise<void> {
           risk_level: "high",
           risk_notes: "Legal gray zone. Start with low-risk (Tooth Seal) before synthesis. Warrant canary active. Onion site available.",
           contact_info: "fourthievesvinegar.org | .onion: ga5wrpojaen4lhedpp2ccbps2gzdt5kxtyvqwr364jji53oqjbsbdvyd.onion",
-          is_211_alternative: 1
+          is_211_alternative: 1,
+          verification_tier: "community",
+          external_codes: JSON.stringify({}),
+          source_attribution: "mutual_aid_network_2023"
         },
         {
           id: 3,
@@ -102,13 +141,16 @@ function loadSampleData(): Promise<void> {
           risk_level: "none",
           risk_notes: "Industry sizing is lies. No company, no staff, no ads, no tracking, no AI training on your data.",
           contact_info: "freesewing.org",
-          is_211_alternative: 1
+          is_211_alternative: 1,
+          verification_tier: "official",
+          external_codes: JSON.stringify({ ein: ["pending_registration"], open_referral: ["sewing-patterns" ]}),
+          source_attribution: "maintainer_direct_2024"
         }
       ];
       
       const stmt = database.prepare(`
-        INSERT INTO resources (id, name, category, location, requirements, accommodates, off_label_uses, risk_level, risk_notes, contact_info, is_211_alternative)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO resources (id, name, category, location, requirements, accommodates, off_label_uses, risk_level, risk_notes, contact_info, is_211_alternative, verification_tier, external_codes, source_attribution)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       let completed = 0;
@@ -125,6 +167,9 @@ function loadSampleData(): Promise<void> {
           sample.risk_notes,
           sample.contact_info,
           sample.is_211_alternative,
+          sample.verification_tier,
+          sample.external_codes,
+          sample.source_attribution,
           (err: Error | null) => {
             if (err) {
               console.error("failed to insert:", sample.name, err);

@@ -48,16 +48,17 @@ const server = createServer(async (req, res) => {
     if (url === "/" && method === "GET") {
       jsonResponse(res, 200, {
         name: "partyline",
-        version: "1.0.0",
+        version: "0.1.0",
         message: "we gotchu fam 🤙",
         endpoints: [
-          "GET  /tools/search_resources?category=safety&location=seattle",
+          "GET  /tools/search_resources?category=safety&location=seattle&verification=community&has_external_code=airs&source=arizona",
           "GET  /tools/check_eligibility?barriers=undocumented,unhoused",
           "GET  /tools/assess_risk/:id",
           "POST /tools/search_resources",
           "POST /tools/check_eligibility",
           "POST /tools/assess_risk",
         ],
+        docs: "verification tier = data lineage, not quality. Never blocks results."
       });
       return;
     }
@@ -68,10 +69,14 @@ const server = createServer(async (req, res) => {
         const params = new URL(url, `http://${CONFIG.host}:${CONFIG.port}`).searchParams;
         const category = params.get("category") || undefined;
         const location = params.get("location") || undefined;
+        const verification = params.get("verification") || undefined;
+        const has_external_code = params.get("has_external_code") || undefined;
+        const source = params.get("source") || undefined;
         
-        const resources: Resource[] = await searchResources(category, location);
+        const resources: Resource[] = await searchResources(category, location, verification, has_external_code, source);
         jsonResponse(res, 200, { 
           tool: "search_resources",
+          filters: { category, location, verification, has_external_code, source },
           count: resources.length,
           data: resources 
         });
@@ -79,10 +84,20 @@ const server = createServer(async (req, res) => {
         const body = await parseBody(req);
         const resources: Resource[] = await searchResources(
           body.category,
-          body.location
+          body.location,
+          body.verification,
+          body.has_external_code,
+          body.source
         );
         jsonResponse(res, 200, { 
           tool: "search_resources",
+          filters: { 
+            category: body.category, 
+            location: body.location,
+            verification: body.verification,
+            has_external_code: body.has_external_code,
+            source: body.source
+          },
           count: resources.length,
           data: resources 
         });
